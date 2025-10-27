@@ -1,0 +1,16 @@
+# Ignore environment files
+.env
+
+# Node logs and temporary files (if any)
+*.log
+*.tmp
+
+# Docker-related files
+**/__pycache__/
+**/.DS_Store
+**/.idea/
+**/.vscode/
+
+# Optional: ignore any build artifacts
+build/
+dist/
