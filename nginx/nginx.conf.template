@@ -1,0 +1,51 @@
+# Nginx Configuration Template
+# Blue/Green Deployment Setup
+
+
+# Define upstream servers — where Nginx sends traffic
+# The 'backup' keyword means this server is only used if the primary fails
+upstream app_upstream {
+    server blue_service:8080 max_fails=2 fail_timeouts=5s
+
+    server green_service:8080 backup;
+}
+
+# HTTP server configuration (Nginx listens on port 80 inside the container)
+server {
+    listen 80;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    # HEALTH CHECK ENDPOINT
+    location /Healthz {
+        proxy_pass http://app_upstream
+    }
+
+    # VERSION ENDPOINT
+    location /version {
+        # proxy all /version requests to the upstream(blue by default)
+        proxy_pass http://app_upstream
+
+        # Forward headers from the upstream back to the client
+        proxy_pass_header X-App-Pool;
+        proxy_pass_header X-Release-Id;
+
+        # Set timeouts — detect failure quickly
+        proxy_connect_timeout 1s;
+        proxy_send_timeout 2s;
+        proxy_read_timeout 2s;
+
+        # Retry logic: if Blue fails, retry on Green
+        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+
+        # Keep client IP info
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /chaos/ {
+            proxy_pass http://app_upstream;
+        }   
+}        
