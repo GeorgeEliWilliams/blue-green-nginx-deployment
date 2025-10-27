@@ -42,20 +42,20 @@ ACTIVE_POOL=blue
 
 ## Running the Project
 
-# Clone the Repository
+### Clone the Repository
 ```bash
 git clone https://github.com/<your-username>/<repo-name>.git
 cd <repo-name>
 ```
 
-# Create and Configure .env
+### Create and Configure .env
 ```bash 
 cp .env.example .env
 ```
 
 Edit the file to match your image names and versions.
 
-# Start the Stack
+### Start the Stack
 ```bash
 docker-compose up -d
 ```
@@ -70,12 +70,12 @@ This launches:
 
 ## Testing the Setup
 
-# 1. Check Blue Service
+### 1. Check Blue Service
 ```bash
 curl http://localhost:8080/version
 ```
 
-# 2. Trigger Chaos (Simulate Failure)
+### 2. Trigger Chaos (Simulate Failure)
 ```bash
 docker stop blue_service
 ```
