@@ -1,34 +1,53 @@
 version: "3.8"
 
 services:
+  #  BLUE SERVICE (Primary)
   blue:
+    # Use the image defined in your .env file
     image: ${BLUE_IMAGE}
     container_name: blue_service
-    environment: 
+    # RELEASE_ID will be used by the Node.js app to set X-Release-Id header
+    environment:
       - RELEASE_ID=${RELEASE_ID_BLUE}
-    ports: 
+    # Map host port 8081 → container's internal port 8080
+    # So you can reach the Blue app directly at http://localhost:8081
+    ports:
       - "8081:8080"
 
+
+  #  GREEN SERVICE (Backup)
   green:
     image: ${GREEN_IMAGE}
     container_name: green_service
-    environment: 
+
+    # Pass unique release ID for Green
+    environment:
       - RELEASE_ID=${RELEASE_ID_GREEN}
+
     ports:
       - "8082:8080"
 
-  
+
+  #  NGINX PROXY (Load Balancer)
   nginx:
     image: nginx:latest
     container_name: nginx_proxy
+
+    # Expose Nginx to your host on port 8080
+    # So your public entrypoint is http://localhost:8080
     ports:
       - "8080:80"
+
+    # Mount your Nginx config template from local machine into the container
+    # Nginx will use envsubst to substitute variables dynamically
     volumes:
       - ./nginx/nginx.conf.template:/etc/nginx/templates/nginx.conf.template
     environment:
+      # Determines which pool (blue or green) is active
       - ACTIVE_POOL=${ACTIVE_POOL}
       - NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates
       - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
+
     depends_on:
       - blue
       - green
