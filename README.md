@@ -39,3 +39,50 @@ RELEASE_ID_BLUE=1.0.0
 RELEASE_ID_GREEN=1.0.1
 ACTIVE_POOL=blue
 ```
+
+## Running the Project
+
+# Clone the Repository
+```bash
+git clone https://github.com/<your-username>/<repo-name>.git
+cd <repo-name>
+```
+
+# Create and Configure .env
+```bash 
+cp .env.example .env
+```
+
+Edit the file to match your image names and versions.
+
+# Start the Stack
+```bash
+docker-compose up -d
+```
+
+This launches:
+
+- Blue on localhost:8081
+
+- Green on localhost:8082
+
+- Nginx proxy on localhost:8080
+
+## Testing the Setup
+
+# 1. Check Blue Service
+```bash
+curl http://localhost:8080/version
+```
+
+# 2. Trigger Chaos (Simulate Failure)
+```bash
+docker stop blue_service
+```
+
+Then run;
+```bash
+curl http://localhost:8080/version
+```
+
+Nginx automatically reroutes traffic to Green — no downtime, no failed requests.
