@@ -38,12 +38,12 @@ services:
       - RELEASE_ID_GREEN=${RELEASE_ID_GREEN}
     command: >
       /bin/sh -c "
-      if [ \"$$ACTIVE_POOL\" = 'blue' ]; then
-        export ACTIVE_RELEASE_ID=$$RELEASE_ID_BLUE;
+      if [ \"$ACTIVE_POOL\" = 'blue' ]; then
+        export ACTIVE_RELEASE_ID=$RELEASE_ID_BLUE;
       else
-        export ACTIVE_RELEASE_ID=$$RELEASE_ID_GREEN;
+        export ACTIVE_RELEASE_ID=$RELEASE_ID_GREEN;
       fi;
-      envsubst '$$ACTIVE_SERVICE $$INACTIVE_SERVICE $$ACTIVE_POOL $$INACTIVE_POOL $$ACTIVE_RELEASE_ID'
+      envsubst '$ACTIVE_SERVICE $$INACTIVE_SERVICE $ACTIVE_POOL $INACTIVE_POOL $ACTIVE_RELEASE_ID'
       < /etc/nginx/templates/nginx.conf.template \
       > /etc/nginx/conf.d/default.conf &&
       nginx -g 'daemon off;'
