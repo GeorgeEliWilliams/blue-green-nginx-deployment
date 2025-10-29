@@ -1,0 +1,16 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package.json .
+COPY app.js .
+
+RUN npm install
+
+ENV PORT=8080
+ENV RELEASE_ID=v1.0.0
+ENV APP_POOL=blue
+
+EXPOSE 8080
+
+CMD ["node", "app.js"]
