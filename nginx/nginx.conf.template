@@ -4,7 +4,8 @@
 upstream app_upstream {
     # Primary (active) service
     server ${ACTIVE_SERVICE}:8080 max_fails=2 fail_timeout=5s;
-    # Backup service
+
+    # Backup (inactive) service
     server ${INACTIVE_SERVICE}:8080 backup;
 }
 
@@ -14,7 +15,7 @@ server {
     access_log /var/log/nginx/access.log;
     error_log /var/log/nginx/error.log;
 
-    # Forward headers from upstream
+    # Forward versioning and pool headers
     proxy_pass_header X-App-Pool;
     proxy_pass_header X-Release-Id;
 
@@ -22,6 +23,8 @@ server {
         proxy_pass http://app_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location /version {
