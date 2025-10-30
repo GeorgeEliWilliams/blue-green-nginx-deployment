@@ -14,3 +14,4 @@ ENV APP_POOL=green
 EXPOSE 8080
 
 CMD ["node", "app.js"]
+
