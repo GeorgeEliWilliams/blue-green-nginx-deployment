@@ -1,6 +1,6 @@
 # Blue/Green Nginx Template (Fixed version)
 
-# --- Custom log format ---
+#  Custom log format
 log_format enhanced '$remote_addr - $time_local '
                     'pool=$upstream_http_x_app_pool release=$upstream_http_x_release_id '
                     'status=$status upstream_status=$upstream_status '

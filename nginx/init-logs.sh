@@ -11,5 +11,3 @@ touch /var/log/nginx/access.log /var/log/nginx/error.log
 # Give permissions
 chmod 666 /var/log/nginx/*.log
 
-# Start nginx normally
-nginx -g 'daemon off;'
