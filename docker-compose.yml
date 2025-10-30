@@ -35,20 +35,32 @@ services:
       - ./nginx/nginx.conf.template:/etc/nginx/templates/nginx.conf.template
       - ./nginx/start-nginx.sh:/start-nginx.sh
       - ./nginx/init-logs.sh:/init-logs.sh
-      - nginx_logs:/var/log/nginx         
+      - ./nginx/logs:/var/log/nginx        
     environment:
       - ACTIVE_POOL=${ACTIVE_POOL}
       - INACTIVE_POOL=${INACTIVE_POOL}
       - RELEASE_ID_BLUE=${RELEASE_ID_BLUE}
       - RELEASE_ID_GREEN=${RELEASE_ID_GREEN}
     command: ["/bin/sh", "-c", "/init-logs.sh & /start-nginx.sh"]
-
     depends_on:
       - blue
       - green
     restart: always
 
-volumes:
-  nginx_logs: 
+  # ALERT WATCHER
+  alert_watcher:
+    build: ./watcher
+    container_name: alert_watcher
+    volumes:
+      - ./nginx/logs:/var/log/nginx        
+      - ./watcher:/app
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - ERROR_RATE_THRESHOLD=0.2
+      - WINDOW_SIZE=30
+      - POLL_INTERVAL=2
+    depends_on:
+      - nginx
+    restart: always
 
 
