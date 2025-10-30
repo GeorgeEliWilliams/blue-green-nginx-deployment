@@ -62,7 +62,7 @@ Slack Webhook or Notification Failure
 Meaning:
 The monitoring script failed to send alerts due to a misconfigured or invalid Slack webhook.
 
-Troubleshooting Tips
+# #Troubleshooting Tips
 
 Nginx startup error:
 
