@@ -22,6 +22,56 @@ The active service (Blue or Green) is returning too many failed responses (HTTP 
 
 **Actions to Take:**
 1. Check which pool is active:
-   ```bash
-   echo $ACTIVE_POOL
-  ```
+```bash
+ echo $ACTIVE_POOL
+```
+
+2. Confirm service health
+ ```bash
+ curl http://localhost:8080/health
+```
+
+Verify successful switch:
+```bash
+curl http://localhost:8080/
+```
+
+2. Service Down Alert
+**Message Example:**  
+> `🚨 CRITICAL: Active service blue_service is unreachable.`
+
+Meaning:
+Nginx or the backend container failed health checks — requests are not being served.
+
+Actions to Take:
+
+1. Inspect logs:
+```bash
+docker logs nginx_proxy
+docker logs blue_service
+docker logs green_service
+```
+
+2. Restart the affected service
+
+Slack Webhook or Notification Failure
+
+**Message Example:**  
+> `❗ Warning: Slack notification failed. Check webhook URL or network.`
+
+Meaning:
+The monitoring script failed to send alerts due to a misconfigured or invalid Slack webhook.
+
+Troubleshooting Tips
+
+Nginx startup error:
+
+“worker_processes directive is not allowed here”
+
+Remove the worker_processes directive from /nginx/conf.d/default.conf (belongs in nginx.conf, not site config).
+
+No Slack alerts appearing:
+
+Verify Slack app is active in the workspace.
+
+Check if alert_watcher container is running:
