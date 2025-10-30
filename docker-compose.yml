@@ -34,6 +34,7 @@ services:
     volumes:
       - ./nginx/nginx.conf.template:/etc/nginx/templates/nginx.conf.template
       - ./nginx/start-nginx.sh:/start-nginx.sh
+      - nginx_logs:/var/log/nginx         
     environment:
       - ACTIVE_POOL=${ACTIVE_POOL}
       - INACTIVE_POOL=${INACTIVE_POOL}
@@ -44,5 +45,8 @@ services:
       - blue
       - green
     restart: always
+
+volumes:
+  nginx_logs: 
 
 
