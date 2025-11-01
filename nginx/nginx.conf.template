@@ -29,6 +29,10 @@ map $ACTIVE_POOL $backend {
 server {
     listen 80;
 
+
+access_log /var/log/blue-green/access.log;
+error_log /var/log/blue-green/error.log;
+
     location / {
         proxy_pass http://$backend;
         proxy_set_header X-App-Pool $ACTIVE_POOL;

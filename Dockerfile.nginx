@@ -1,0 +1,6 @@
+FROM nginx:1.25-alpine
+
+RUN mkdir -p /var/log/blue-green \
+    && touch /var/log/blue-green/access.log \
+    && touch /var/log/blue-green/error.log \
+    && chown -R nginx:nginx /var/log/blue-green

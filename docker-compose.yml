@@ -1,4 +1,4 @@
-version: "3.8"
+
 
 services:
   # BLUE SERVICE
@@ -27,7 +27,9 @@ services:
 
   # NGINX PROXY (Load Balancer)
   nginx:
-    image: nginx:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: nginx_proxy
     ports:
       - "8080:80"
@@ -35,7 +37,7 @@ services:
       - ./nginx/nginx.conf.template:/etc/nginx/templates/nginx.conf.template
       - ./nginx/start-nginx.sh:/start-nginx.sh
       - ./nginx/init-logs.sh:/init-logs.sh
-      - ./nginx/logs:/var/log/nginx        
+      - ./nginx/logs:/var/log/blue-green        
     environment:
       - ACTIVE_POOL=${ACTIVE_POOL}
       - INACTIVE_POOL=${INACTIVE_POOL}
