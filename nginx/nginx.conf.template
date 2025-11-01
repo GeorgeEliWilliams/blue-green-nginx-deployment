@@ -1,15 +1,11 @@
-# Blue/Green Nginx Template (Fixed version)
+# Blue/Green Nginx Template (Final)
 
-#  Custom log format
 log_format enhanced '$remote_addr - $time_local '
                     'pool=$upstream_http_x_app_pool release=$upstream_http_x_release_id '
                     'status=$status upstream_status=$upstream_status '
                     'upstream_addr=$upstream_addr '
                     'request_time=$request_time upstream_time=$upstream_response_time '
                     'uri="$request_uri"';
-
-access_log /var/log/nginx/access.log enhanced;
-error_log /var/log/nginx/error.log;
 
 upstream blue_pool {
     server blue_service:8080;
@@ -19,7 +15,7 @@ upstream green_pool {
     server green_service:8080;
 }
 
-# Map active pool dynamically
+# Dynamic pool selection
 map $ACTIVE_POOL $backend {
     default blue_pool;
     blue blue_pool;
@@ -29,9 +25,8 @@ map $ACTIVE_POOL $backend {
 server {
     listen 80;
 
-
-access_log /var/log/blue-green/access.log;
-error_log /var/log/blue-green/error.log;
+    access_log /var/log/blue-green/access.log enhanced;
+    error_log /var/log/blue-green/error.log;
 
     location / {
         proxy_pass http://$backend;
