@@ -1,7 +1,4 @@
-
-
 services:
-  # BLUE SERVICE
   blue:
     image: ${BLUE_IMAGE}
     container_name: blue_service
@@ -13,7 +10,6 @@ services:
       - "8081:${PORT}"
     restart: always
 
-  # GREEN SERVICE
   green:
     image: ${GREEN_IMAGE}
     container_name: green_service
@@ -25,7 +21,6 @@ services:
       - "8082:${PORT}"
     restart: always
 
-  # NGINX PROXY (Load Balancer)
   nginx:
     build:
       context: .
@@ -37,7 +32,7 @@ services:
       - ./nginx/nginx.conf.template:/etc/nginx/templates/nginx.conf.template
       - ./nginx/start-nginx.sh:/start-nginx.sh
       - ./nginx/init-logs.sh:/init-logs.sh
-      - ./nginx/logs:/var/log/blue-green        
+      - ./nginx/logs:/var/log/blue-green
     environment:
       - ACTIVE_POOL=${ACTIVE_POOL}
       - INACTIVE_POOL=${INACTIVE_POOL}
@@ -49,20 +44,17 @@ services:
       - green
     restart: always
 
-  # ALERT WATCHER
   alert_watcher:
     build: ./watcher
     container_name: alert_watcher
     volumes:
-      - ./nginx/logs:/var/log/nginx        
+      - ./nginx/logs:/var/log/blue-green
       - ./watcher:/app
     environment:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
-      - ERROR_RATE_THRESHOLD=0.2
-      - WINDOW_SIZE=30
-      - POLL_INTERVAL=2
+      - ERROR_RATE_THRESHOLD=${ERROR_RATE_THRESHOLD}
+      - WINDOW_SIZE=${WINDOW_SIZE}
+      - POLL_INTERVAL=${POLL_INTERVAL}
     depends_on:
       - nginx
     restart: always
-
-
