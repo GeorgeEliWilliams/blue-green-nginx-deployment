@@ -1,92 +1,125 @@
-import time, os, re, requests, collections, threading
+import os
+import time
+import json
+import re
+import logging
+import requests
+from collections import deque
 
-# === Configuration ===
-ACCESS_LOG_PATH = "/var/log/blue-green/access.log"
-ERROR_LOG_PATH = "/var/log/blue-green/error.log"
-
-SLACK_WEBHOOK = os.getenv("SLACK_WEBHOOK_URL")
-ERROR_THRESHOLD = float(os.getenv("ERROR_RATE_THRESHOLD", 0.02))   # e.g. 0.02 = 2%
-WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", 200))                   # number of recent requests to check
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 2))                 # seconds between reads
-ALERT_COOLDOWN_SEC = int(os.getenv("ALERT_COOLDOWN_SEC", 30))      # avoid spam
-
-# === Regex pattern for NGINX custom log ===
-log_line = re.compile(
-    r"pool=(?P<pool>\S*)\s+release=(?P<release>\S*)\s+status=(?P<status>\d+)"
+# ---------------- Logging Setup ----------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
 )
 
-# === Globals ===
-events = collections.deque(maxlen=2000)
-last_pool = None
+# ---------------- Environment Variables ----------------
+LOG_FILE_PATH = "/var/log/blue-green/access.log"
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
+# Lower thresholds for testing; adjust for production
+ERROR_RATE_THRESHOLD = float(os.getenv("ERROR_RATE_THRESHOLD", "0.01"))  # 1%
+WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "20"))  # smaller window for faster detection
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "1"))  # check logs every second
+
+# ---------------- State Tracking ----------------
+recent_statuses = deque(maxlen=WINDOW_SIZE)
 last_alert_time = 0
+last_pool = None
 
-# === Helper to send alert ===
-def send_alert(message):
-    global last_alert_time
-    now = time.time()
-    if now - last_alert_time < ALERT_COOLDOWN_SEC:
-        return
-    last_alert_time = now
-    if SLACK_WEBHOOK:
-        try:
-            requests.post(SLACK_WEBHOOK, json={"text": message}, timeout=5)
-        except Exception as e:
-            print(f"[WARN] Slack alert failed: {e}")
-    print(f"[ALERT] {message}")
+# ---------------- Slack Notification ----------------
+def send_slack_alert(message):
+    """Send formatted message to Slack or Teams via webhook."""
+    try:
+        response = requests.post(SLACK_WEBHOOK_URL, json={"text": message})
+        if response.status_code != 200:
+            logging.error(f"Slack webhook returned {response.status_code}: {response.text}")
+        else:
+            logging.info("✅ Alert sent successfully.")
+    except Exception as e:
+        logging.error(f"Failed to send Slack alert: {e}")
 
-# === Monitor Access Log for 5xx + Failover ===
-def monitor_access_log():
-    global last_pool
-    print("🔍 Watching access.log for pool switch + error rate alerts...")
-    with open(ACCESS_LOG_PATH, "r") as f:
-        f.seek(0, 2)  # move to end of file
+# ---------------- Log Parser ----------------
+def parse_log_line(line):
+    """
+    Extract pool, release, and HTTP status from access log line.
+    Example:
+    pool=blue release=v1.0.0 status=200 upstream_status=200
+    """
+    match = re.search(r"pool=(\w+).*release=(v[\d\.]+).*status=(\d+)", line)
+    if match:
+        pool, release, status = match.groups()
+        return pool, release, int(status)
+    return None, None, None
+
+# ---------------- Watcher Logic ----------------
+def monitor_logs():
+    global last_pool, last_alert_time
+
+    logging.info("👀 Watcher started: monitoring Nginx access.log for errors and failovers...")
+    logging.info(f"Threshold: {ERROR_RATE_THRESHOLD*100:.2f}% | Window size: {WINDOW_SIZE} | Poll: {POLL_INTERVAL}s")
+
+    with open(LOG_FILE_PATH, "r") as f:
+        f.seek(0, 2)  # Move to end of file
+
         while True:
             line = f.readline()
+
             if not line:
                 time.sleep(POLL_INTERVAL)
                 continue
 
-            m = log_line.search(line)
-            if not m:
+            pool, release, status = parse_log_line(line)
+            if not pool or not status:
                 continue
 
-            pool = m.group("pool")
-            status = int(m.group("status"))
-            timestamp = time.time()
+            recent_statuses.append(status)
 
-            events.append((timestamp, status))
+            # ---- Detect Failover (pool switch) ----
+            if last_pool and pool != last_pool:
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                message = (
+                    "*Failover Event Detected*\n"
+                    ":arrows_counterclockwise: **Failover Detected**\n"
+                    f"Previous Pool: *{last_pool.upper()}* → Current Pool: *{pool.upper()}*\n"
+                    ":warning: *Action Required:* Check the health of the previous pool.\n"
+                    f"Timestamp: `{timestamp}`\n"
+                    "_DevOps Monitoring | Blue-Green Deployment_"
+                )
+                send_slack_alert(message)
+                logging.info(f"⚠️ Failover detected: {last_pool} → {pool}")
+            last_pool = pool
 
-            # remove old entries
-            while events and timestamp - events[0][0] > WINDOW_SIZE:
-                events.popleft()
+            # ---- Error Rate Detection ----
+            if len(recent_statuses) == WINDOW_SIZE:
+                error_count = sum(1 for s in recent_statuses if s >= 500)
+                error_rate = error_count / WINDOW_SIZE
 
-            total = len(events)
-            errors = len([s for _, s in events if s >= 500])
-            error_rate = errors / total if total else 0
+                # Log diagnostic info
+                logging.info(f"🧮 Checking error rate: {error_count}/{WINDOW_SIZE} errors ({error_rate*100:.2f}%)")
 
-            if error_rate > ERROR_THRESHOLD:
-                send_alert(f"🚨 High error rate detected: {error_rate*100:.2f}% "
-                           f"(>{ERROR_THRESHOLD*100:.0f}% threshold over {total} requests)")
+                if error_rate > ERROR_RATE_THRESHOLD:
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    message = (
+                        "*Blue/Green Alert - ERROR_RATE*\n"
+                        ":chart_with_upwards_trend: **High Error Rate Alert!**\n"
+                        f"• Error Rate: {error_rate*100:.2f}% (Threshold: {ERROR_RATE_THRESHOLD*100:.2f}%)\n"
+                        f"• Errors: {error_count}/{WINDOW_SIZE} requests\n"
+                        f"• Current Pool: *{pool.upper()}*\n"
+                        f"• Window Size: {WINDOW_SIZE} requests\n"
+                        ":warning: **Action Required:** Investigate upstream logs and consider manual failover.\n"
+                        f"Timestamp: `{timestamp}`\n"
+                        "_DevOps Monitoring | Blue-Green Deployment_"
+                    )
+                    send_slack_alert(message)
+                    logging.warning(f"🚨 High error rate detected: {error_rate*100:.2f}% on {pool}")
+                    recent_statuses.clear()  # reset after alert
 
-            if last_pool and pool != last_pool and pool != "-":
-                send_alert(f"🔄 Pool switched from {last_pool} → {pool}")
-            if pool != "-":
-                last_pool = pool
-
-# === Monitor Error Log for NGINX Runtime Errors ===
-def monitor_error_log():
-    print("🧩 Watching error.log for runtime errors...")
-    with open(ERROR_LOG_PATH, "r") as f:
-        f.seek(0, 2)
-        while True:
-            line = f.readline()
-            if not line:
-                time.sleep(POLL_INTERVAL)
-                continue
-            if any(x in line.lower() for x in ["error", "crit", "alert", "emerg"]):
-                send_alert(f"❗ NGINX error detected:\n{line.strip()}")
-
-# === Entry point ===
+# ---------------- Entrypoint ----------------
 if __name__ == "__main__":
-    threading.Thread(target=monitor_error_log, daemon=True).start()
-    monitor_access_log()
+    try:
+        monitor_logs()
+    except KeyboardInterrupt:
+        logging.info("Watcher stopped by user.")
+    except Exception as e:
+        logging.exception(f"Watcher crashed: {e}")

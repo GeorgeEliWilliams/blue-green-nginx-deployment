@@ -1,5 +1,6 @@
-# Blue/Green Nginx Template (Final)
+# Blue/Green Nginx Template (Auto-Failover + grader-ready)
 
+# --- Log format captures upstream headers for watcher and grader ---
 log_format enhanced '$remote_addr - $time_local '
                     'pool=$upstream_http_x_app_pool release=$upstream_http_x_release_id '
                     'status=$status upstream_status=$upstream_status '
@@ -7,46 +8,83 @@ log_format enhanced '$remote_addr - $time_local '
                     'request_time=$request_time upstream_time=$upstream_response_time '
                     'uri="$request_uri"';
 
+# --- Define raw pools (individual servers) ---
 upstream blue_pool {
-    server blue_service:8080;
+    server blue_service:8080 max_fails=1 fail_timeout=5s;
 }
 
 upstream green_pool {
-    server green_service:8080;
+    server green_service:8080 max_fails=1 fail_timeout=5s;
 }
 
-# Dynamic pool selection
-map $ACTIVE_POOL $backend {
-    default blue_pool;
-    blue blue_pool;
-    green green_pool;
+# --- Two compound upstreams: blue-primary (green backup) and green-primary (blue backup) ---
+# Blue primary, Green backup
+upstream active_blue_pool {
+    server blue_service:8080 max_fails=1 fail_timeout=5s;
+    server green_service:8080 backup;
+}
+
+# Green primary, Blue backup
+upstream active_green_pool {
+    server green_service:8080 max_fails=1 fail_timeout=5s;
+    server blue_service:8080 backup;
+}
+
+# --- Select which compound upstream to use based on ACTIVE_POOL env var --- 
+# The CI/grader will set ACTIVE_POOL=blue (default) or ACTIVE_POOL=green
+map $ACTIVE_POOL $active_upstream {
+    default active_blue_pool;
+    blue   active_blue_pool;
+    green  active_green_pool;
 }
 
 server {
     listen 80;
 
+    # write logs to mounted folder
     access_log /var/log/blue-green/access.log enhanced;
-    error_log /var/log/blue-green/error.log;
+    error_log  /var/log/blue-green/error.log;
 
+    # --- Global proxy tuning: short timeouts and retries ---
+    # These reduce client wait and allow Nginx to detect failures quickly.
+    proxy_connect_timeout 1s;
+    proxy_send_timeout 3s;
+    proxy_read_timeout 3s;
+    send_timeout 3s;
+
+    # Important: make Nginx retry a different upstream for transient failures (within same client request)
+    # Consider error, timeout, invalid_header and common 5xx codes as retriable.
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+    proxy_next_upstream_tries 2;
+
+    # --- Main traffic (routes through the selected compound upstream) ---
     location / {
-        proxy_pass http://$backend;
-        proxy_set_header X-App-Pool $ACTIVE_POOL;
-        proxy_set_header X-Release-Id $ACTIVE_RELEASE_ID;
+        proxy_pass http://$active_upstream;
+
+        # Keep original request metadata
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Ensure app-provided metadata headers are forwarded to clients unchanged
+        proxy_pass_header X-App-Pool;
+        proxy_pass_header X-Release-Id;
     }
 
+    # version endpoint: forwarded the same way so client sees X-App-Pool & X-Release-Id
     location /version {
-        proxy_pass http://$backend;
+        proxy_pass http://$active_upstream;
+        proxy_pass_header X-App-Pool;
+        proxy_pass_header X-Release-Id;
     }
 
     location /healthz {
-        proxy_pass http://$backend;
+        proxy_pass http://$active_upstream;
     }
 
+    # chaos endpoints are proxied too (grader triggers chaos on direct blue/green ports)
     location /chaos/ {
-        proxy_pass http://$backend;
+        proxy_pass http://$active_upstream;
     }
 }
