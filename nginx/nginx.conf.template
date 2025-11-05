@@ -1,4 +1,4 @@
-# Blue/Green Nginx Template (Auto-Failover + grader-ready)
+# Blue/Green Nginx Template (Auto-Failover)
 
 # --- Log format captures upstream headers for watcher and grader ---
 log_format enhanced '$remote_addr - $time_local '
