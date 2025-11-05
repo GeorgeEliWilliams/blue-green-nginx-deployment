@@ -31,7 +31,7 @@ upstream active_green_pool {
 }
 
 # --- Select which compound upstream to use based on ACTIVE_POOL env var --- 
-# The CI/grader will set ACTIVE_POOL=blue (default) or ACTIVE_POOL=green
+# The CI will set ACTIVE_POOL=blue (default) or ACTIVE_POOL=green
 map $ACTIVE_POOL $active_upstream {
     default active_blue_pool;
     blue   active_blue_pool;
